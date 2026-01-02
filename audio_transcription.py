@@ -48,7 +48,7 @@ def transcribe_audio_bytes(audio_bytes: bytes, mime_type: str = "audio/webm") ->
             prompt = "Please transcribe this audio file word for word. Return only the transcribed text, nothing else. Do not add any explanations or formatting."
             
             # Generate transcription using Gemini 2.5 Flash
-            model_name = "models/gemini-2.5-flash"
+            model_name = "models/gemini-flash-latest"
             
             # Try different methods to pass audio to Gemini
             response = None
