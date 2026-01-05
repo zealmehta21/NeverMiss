@@ -16,42 +16,120 @@ import pytz
 
 # Page configuration
 st.set_page_config(
-    page_title="NeverMiss - Dashboard",
+    page_title="Skkadoosh - Dashboard",
     page_icon="✅",
     layout="wide"
 )
 
-# Custom CSS
+# Custom CSS with theme detection
 st.markdown("""
+<script>
+    // Detect system theme preference
+    function detectTheme() {
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
+        
+        // Listen for theme changes
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+            document.documentElement.setAttribute('data-theme', e.matches ? 'dark' : 'light');
+        });
+    }
+    
+    // Run on page load
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', detectTheme);
+    } else {
+        detectTheme();
+    }
+</script>
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Libre+Baskerville:wght@400;700&family=DM+Sans:wght@400;500;700&display=swap');
     
+    /* CSS Variables for Light Theme (default) */
+    :root {
+        --bg-color: #ffffff;
+        --text-color: #454240;
+        --heading-color: #333333;
+        --task-bg: #ffffff;
+        --button-primary: #ff4b4b;
+        --button-primary-hover: #e63946;
+        --border-color: #FF6B6B;
+        --mic-bg: #ffffff;
+        --mic-icon-color: #ff4b4b;
+        --mic-hover-bg: #f5f5f5;
+    }
+    
+    /* CSS Variables for Dark Theme */
+    [data-theme="dark"] {
+        --bg-color: #1a1a1a;
+        --text-color: #e0e0e0;
+        --heading-color: #ffffff;
+        --task-bg: #2a2a2a;
+        --button-primary: #ff4b4b;
+        --button-primary-hover: #ff6b6b;
+        --border-color: #FF6B6B;
+        --mic-bg: #2a2a2a;
+        --mic-icon-color: #ff6b6b;
+        --mic-hover-bg: #3a3a3a;
+    }
+    
     .main {
-        background-color: #FFFDFA;
+        background-color: var(--bg-color) !important;
+    }
+    
+    body {
+        background-color: var(--bg-color) !important;
+        color: var(--text-color) !important;
     }
     
     h1, h2, h3, h4 {
         font-family: 'Libre Baskerville', serif;
-        color: #5C4E3D;
+        color: var(--heading-color) !important;
     }
     
     body, .stTextInput>div>div>input {
         font-family: 'DM Sans', sans-serif;
-        color: #454240;
+        color: var(--text-color) !important;
+    }
+    
+    .stTextInput>div>div>input {
+        background-color: var(--bg-color) !important;
     }
     
     .task-item {
-        background-color: #FFFDFA;
+        background-color: var(--task-bg) !important;
         padding: 15px;
         margin: 10px 0;
-        border-left: 4px solid #B88E23;
+        border-left: 4px solid var(--border-color);
         border-radius: 5px;
     }
     
     .priority-p0 { border-left-color: #FF0000; }
     .priority-high { border-left-color: #FF6B6B; }
-    .priority-medium { border-left-color: #B88E23; }
-    .priority-low { border-left-color: #5C4E3D; }
+    .priority-medium { border-left-color: #ff4b4b; }
+    .priority-low { border-left-color: #FFB3BA; }
+    
+    /* Completely hide sidebar and prevent any flash */
+    section[data-testid="stSidebar"],
+    div[data-testid="stSidebar"],
+    .css-1d391kg,
+    [data-testid="stSidebar"] {
+        display: none !important;
+        visibility: hidden !important;
+        width: 0 !important;
+        min-width: 0 !important;
+    }
+    
+    /* Hide sidebar toggle button */
+    button[data-testid="baseButton-header"] {
+        display: none !important;
+    }
+    
+    /* Adjust main content to use full width */
+    .main .block-container {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
     
     /* Navigation header styling */
     .stButton > button {
@@ -59,27 +137,27 @@ st.markdown("""
         border-radius: 5px;
     }
     
-    /* Change primary button color from #ff4b4b to #b88e23 */
+    /* Primary button color */
     .stButton > button[kind="primary"],
     button[kind="primary"],
     [data-testid="baseButton-primary"] {
-        background-color: #b88e23 !important;
-        border-color: #b88e23 !important;
+        background-color: var(--button-primary) !important;
+        border-color: var(--button-primary) !important;
     }
     
     .stButton > button[kind="primary"]:hover,
     button[kind="primary"]:hover,
     [data-testid="baseButton-primary"]:hover {
-        background-color: #a67d1f !important;
-        border-color: #a67d1f !important;
+        background-color: var(--button-primary-hover) !important;
+        border-color: var(--button-primary-hover) !important;
     }
     
-    /* Audio input styling - make microphone button visible and clickable */
+    /* Audio input styling - make microphone button visible and clickable in both themes */
     [data-testid="stAudioInput"] {
-        background-color: #FFFDFA !important;
+        background-color: var(--mic-bg) !important;
     }
     [data-testid="stAudioInput"] > div {
-        background-color: #FFFDFA !important;
+        background-color: var(--mic-bg) !important;
     }
     /* Hide the waveform timecode (00:00 duration display) */
     [data-testid="stAudioInputWaveformTimeCode"] {
@@ -94,15 +172,68 @@ st.markdown("""
         visibility: visible !important;
         pointer-events: auto !important;
         z-index: 100 !important;
-        background-color: #FFFDFA !important;
+        background-color: var(--mic-bg) !important;
+        border: 1px solid var(--mic-icon-color) !important;
+        color: var(--mic-icon-color) !important;
+    }
+    /* Microphone icon styling - ensure visibility in dark theme */
+    [data-testid="stAudioInput"] button svg,
+    [data-testid="stAudioInput"] button path {
+        fill: var(--mic-icon-color) !important;
+        stroke: var(--mic-icon-color) !important;
+        color: var(--mic-icon-color) !important;
     }
     [data-testid="stAudioInput"] button:not(:disabled):hover {
-        opacity: 0.8 !important;
-        background-color: #f5f5f5 !important;
+        opacity: 0.9 !important;
+        background-color: var(--mic-hover-bg) !important;
+        border-color: var(--button-primary-hover) !important;
+    }
+    [data-testid="stAudioInput"] button:not(:disabled):hover svg,
+    [data-testid="stAudioInput"] button:not(:disabled):hover path {
+        fill: var(--button-primary-hover) !important;
+        stroke: var(--button-primary-hover) !important;
     }
     [data-testid="stAudioInput"] button:disabled {
         opacity: 0.5 !important;
         cursor: not-allowed !important;
+    }
+    
+    /* Additional dark theme support for Streamlit components */
+    [data-theme="dark"] .stTextInput>div>div>input {
+        background-color: var(--bg-color) !important;
+        color: var(--text-color) !important;
+        border-color: #444 !important;
+    }
+    
+    [data-theme="dark"] .stSelectbox>div>div>select {
+        background-color: var(--bg-color) !important;
+        color: var(--text-color) !important;
+    }
+    
+    [data-theme="dark"] .stDateInput>div>div>input {
+        background-color: var(--bg-color) !important;
+        color: var(--text-color) !important;
+    }
+    
+    [data-theme="dark"] .stTimeInput>div>div>input {
+        background-color: var(--bg-color) !important;
+        color: var(--text-color) !important;
+    }
+    
+    [data-theme="dark"] .stTextArea>div>div>textarea {
+        background-color: var(--bg-color) !important;
+        color: var(--text-color) !important;
+        border-color: #444 !important;
+    }
+    
+    /* Ensure microphone icon is always visible with high contrast */
+    [data-theme="dark"] [data-testid="stAudioInput"] button {
+        border: 2px solid var(--mic-icon-color) !important;
+        box-shadow: 0 0 4px rgba(255, 107, 107, 0.3) !important;
+    }
+    
+    [data-theme="dark"] [data-testid="stAudioInput"] button:not(:disabled):hover {
+        box-shadow: 0 0 8px rgba(255, 107, 107, 0.5) !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -123,19 +254,18 @@ if 'current_view' not in st.session_state:
 if 'last_input' not in st.session_state:
     st.session_state.last_input = None
 
-# Sidebar for logout only
-with st.sidebar:
-    
-    st.markdown(f"### Welcome, {user_email.split('@')[0]}")
-    
-    if st.button("Logout", use_container_width=True, type="primary"):
+# Main content area
+# Header with title and logout button
+header_col1, header_col2 = st.columns([5, 1])
+with header_col1:
+    st.title("Skkadoosh")
+with header_col2:
+    st.markdown("<br>", unsafe_allow_html=True)  # Align button with title
+    if st.button("Logout", type="primary", use_container_width=True, key="logout_btn"):
         from database import sign_out
         sign_out()
         st.session_state.clear()
-        st.switch_page("pages/1_NeverMiss.py")
-
-# Main content area
-st.title("NeverMiss")
+        st.switch_page("pages/1_Skkadoosh.py")
 
 # Navigation header (tabs style below title)
 nav_options = ["Today", "Week", "Upcoming", "Completed"]
@@ -177,7 +307,7 @@ if st.session_state.current_view in ["today", "week", "upcoming"]:
                 col1, col2 = st.columns([5, 1])
                 
                 with col1:
-                    description_html = f'<p style="color: #454240; margin: 5px 0;">{task.get("description", "")}</p>' if task.get('description') else ''
+                    description_html = f'<p style="color: var(--text-color); margin: 5px 0;">{task.get("description", "")}</p>' if task.get('description') else ''
                     due_date_str = task.get('due_date', '') if task.get('due_date') else 'No due date'
                     if due_date_str != 'No due date':
                         try:
@@ -192,7 +322,7 @@ if st.session_state.current_view in ["today", "week", "upcoming"]:
                     
                     st.markdown(f"""
                     <div class="task-item {priority_class}">
-                        <h4 style="margin: 0; color: #5C4E3D;">{task.get('title', 'Untitled')}</h4>
+                        <h4 style="margin: 0; color: var(--heading-color);">{task.get('title', 'Untitled')}</h4>
                         {description_html}
                         Priority: {priority.upper()} | Due: {due_date_str}
                     </div>
@@ -273,24 +403,40 @@ if st.session_state.current_view in ["today", "week", "upcoming"]:
                             new_due_date = None
                         
                         col_save, col_cancel = st.columns(2)
+                        save_button_clicked = False
+                        cancel_button_clicked = False
+                        
+                        save_button_clicked = False
+                        cancel_button_clicked = False
+                        
+                        col_save, col_cancel = st.columns(2)
                         with col_save:
                             if st.button("Save", key=f"save_edit_{task['id']}"):
-                                updates = {"title": new_title, "description": new_desc, "priority": new_priority}
-                                if new_due_date:
-                                    updates["due_date"] = new_due_date
-                                else:
-                                    updates["due_date"] = None
-                                update_task(task['id'], user_id, **updates)
-                                st.session_state[f"editing_{task['id']}"] = False
-                                try:
-                                    send_task_update_email(user_email, user_id, "updated")
-                                except:
-                                    pass
-                                st.rerun()
+                                save_button_clicked = True
                         with col_cancel:
                             if st.button("Cancel", key=f"cancel_edit_{task['id']}"):
-                                st.session_state[f"editing_{task['id']}"] = False
-                                st.rerun()
+                                cancel_button_clicked = True
+                        
+                        # Process Save button - ONLY send email if Save was clicked, NOT Cancel
+                        if save_button_clicked and not cancel_button_clicked:
+                            # Save button clicked - update task and send email
+                            updates = {"title": new_title, "description": new_desc, "priority": new_priority}
+                            if new_due_date:
+                                updates["due_date"] = new_due_date
+                            else:
+                                updates["due_date"] = None
+                            update_task(task['id'], user_id, **updates)
+                            st.session_state[f"editing_{task['id']}"] = False
+                            # Send email ONLY when Save is explicitly clicked
+                            try:
+                                send_task_update_email(user_email, user_id, "updated")
+                            except:
+                                pass
+                            st.rerun()
+                        elif cancel_button_clicked:
+                            # Cancel button clicked - do NOT update task, do NOT send email
+                            st.session_state[f"editing_{task['id']}"] = False
+                            st.rerun()
                         st.divider()
                 
                 # Snooze box (moved below task section)
@@ -311,67 +457,89 @@ if st.session_state.current_view in ["today", "week", "upcoming"]:
                             with col_time:
                                 custom_time = st.time_input("Time", key=f"custom_time_{task['id']}")
                             
+                            snooze_button_clicked = False
+                            cancel_snooze_clicked = False
+                            
                             col_snooze, col_cancel_snooze = st.columns(2)
                             with col_snooze:
                                 if st.button("Snooze", key=f"confirm_snooze_{task['id']}"):
-                                    from datetime import timedelta
-                                    local_tz = datetime.now().astimezone().tzinfo
-                                    now = datetime.now(local_tz)
-                                    
-                                    if custom_date and custom_time:
-                                        snooze_until = datetime.combine(custom_date, custom_time, local_tz).isoformat()
-                                    else:
-                                        snooze_until = (now + timedelta(hours=2)).isoformat()
-                                    
-                                    snooze_task(task['id'], user_id, snooze_until)
-                                    st.session_state[f"snoozing_{task['id']}"] = False
-                                    try:
-                                        send_task_update_email(user_email, user_id, "updated")
-                                    except:
-                                        pass
-                                    st.rerun()
+                                    snooze_button_clicked = True
                             with col_cancel_snooze:
                                 if st.button("Cancel", key=f"cancel_snooze_{task['id']}"):
-                                    st.session_state[f"snoozing_{task['id']}"] = False
-                                    st.rerun()
+                                    cancel_snooze_clicked = True
+                            
+                            # Process Snooze button - ONLY send email if Snooze was clicked, NOT Cancel
+                            if snooze_button_clicked and not cancel_snooze_clicked:
+                                from datetime import timedelta
+                                local_tz = datetime.now().astimezone().tzinfo
+                                now = datetime.now(local_tz)
+                                
+                                if custom_date and custom_time:
+                                    snooze_until = datetime.combine(custom_date, custom_time, local_tz).isoformat()
+                                else:
+                                    snooze_until = (now + timedelta(hours=2)).isoformat()
+                                
+                                snooze_task(task['id'], user_id, snooze_until)
+                                st.session_state[f"snoozing_{task['id']}"] = False
+                                # Send email ONLY when Snooze is explicitly clicked
+                                try:
+                                    send_task_update_email(user_email, user_id, "updated")
+                                except:
+                                    pass
+                                st.rerun()
+                            elif cancel_snooze_clicked:
+                                # Cancel snooze - do NOT send email, just close snooze box
+                                st.session_state[f"snoozing_{task['id']}"] = False
+                                st.rerun()
                         else:
+                            snooze_button_clicked = False
+                            cancel_snooze_clicked = False
+                            
                             col_snooze, col_cancel_snooze = st.columns(2)
                             with col_snooze:
                                 if st.button("Snooze", key=f"confirm_snooze_{task['id']}"):
-                                    from datetime import timedelta
-                                    local_tz = datetime.now().astimezone().tzinfo
-                                    now = datetime.now(local_tz)
-                                    
-                                    if snooze_option == "5 min":
-                                        snooze_until = (now + timedelta(minutes=5)).isoformat()
-                                    elif snooze_option == "10 min":
-                                        snooze_until = (now + timedelta(minutes=10)).isoformat()
-                                    elif snooze_option == "15 min":
-                                        snooze_until = (now + timedelta(minutes=15)).isoformat()
-                                    elif snooze_option == "30 min":
-                                        snooze_until = (now + timedelta(minutes=30)).isoformat()
-                                    elif snooze_option == "1 hr":
-                                        snooze_until = (now + timedelta(hours=1)).isoformat()
-                                    elif snooze_option == "2 hr":
-                                        snooze_until = (now + timedelta(hours=2)).isoformat()
-                                    elif snooze_option == "Tomorrow 9am":
-                                        tomorrow = now + timedelta(days=1)
-                                        snooze_until = tomorrow.replace(hour=9, minute=0, second=0, microsecond=0).isoformat()
-                                    elif snooze_option == "Next week":
-                                        days_until_next_week = 7 - now.weekday()
-                                        snooze_until = (now + timedelta(days=days_until_next_week)).isoformat()
-                                    
-                                    snooze_task(task['id'], user_id, snooze_until)
-                                    st.session_state[f"snoozing_{task['id']}"] = False
-                                    try:
-                                        send_task_update_email(user_email, user_id, "updated")
-                                    except:
-                                        pass
-                                    st.rerun()
+                                    snooze_button_clicked = True
                             with col_cancel_snooze:
                                 if st.button("Cancel", key=f"cancel_snooze_{task['id']}"):
-                                    st.session_state[f"snoozing_{task['id']}"] = False
-                                    st.rerun()
+                                    cancel_snooze_clicked = True
+                            
+                            # Process Snooze button - ONLY send email if Snooze was clicked, NOT Cancel
+                            if snooze_button_clicked and not cancel_snooze_clicked:
+                                from datetime import timedelta
+                                local_tz = datetime.now().astimezone().tzinfo
+                                now = datetime.now(local_tz)
+                                
+                                if snooze_option == "5 min":
+                                    snooze_until = (now + timedelta(minutes=5)).isoformat()
+                                elif snooze_option == "10 min":
+                                    snooze_until = (now + timedelta(minutes=10)).isoformat()
+                                elif snooze_option == "15 min":
+                                    snooze_until = (now + timedelta(minutes=15)).isoformat()
+                                elif snooze_option == "30 min":
+                                    snooze_until = (now + timedelta(minutes=30)).isoformat()
+                                elif snooze_option == "1 hr":
+                                    snooze_until = (now + timedelta(hours=1)).isoformat()
+                                elif snooze_option == "2 hr":
+                                    snooze_until = (now + timedelta(hours=2)).isoformat()
+                                elif snooze_option == "Tomorrow 9am":
+                                    tomorrow = now + timedelta(days=1)
+                                    snooze_until = tomorrow.replace(hour=9, minute=0, second=0, microsecond=0).isoformat()
+                                elif snooze_option == "Next week":
+                                    days_until_next_week = 7 - now.weekday()
+                                    snooze_until = (now + timedelta(days=days_until_next_week)).isoformat()
+                                
+                                snooze_task(task['id'], user_id, snooze_until)
+                                st.session_state[f"snoozing_{task['id']}"] = False
+                                # Send email ONLY when Snooze is explicitly clicked
+                                try:
+                                    send_task_update_email(user_email, user_id, "updated")
+                                except:
+                                    pass
+                                st.rerun()
+                            elif cancel_snooze_clicked:
+                                # Cancel snooze - do NOT send email, just close snooze box
+                                st.session_state[f"snoozing_{task['id']}"] = False
+                                st.rerun()
                         st.divider()
 
 elif st.session_state.current_view == "completed":
@@ -406,7 +574,6 @@ with input_col1:
     if 'transcribed_text' in st.session_state and st.session_state.transcribed_text:
         # Set the widget value directly in session state (this is the key to making it appear!)
         st.session_state["task_input"] = st.session_state.transcribed_text
-        st.write(f"DEBUG AUDIO: Set st.session_state['task_input'] = '{st.session_state.transcribed_text}'")
     
     # Also check if we need to clear the field after task creation
     if 'clear_input' in st.session_state and st.session_state.clear_input:
@@ -422,16 +589,9 @@ with input_col1:
     user_input = st.text_input(
         "Type or speak your task...",
         key="task_input",
-        placeholder="Message NeverMiss...",
+        placeholder="Message Skkadoosh...",
         label_visibility="collapsed"
     )
-    
-    # Debug: Verify the widget has the transcribed text
-    if user_input and 'transcribed_text' in st.session_state:
-        if user_input == st.session_state.transcribed_text:
-            st.write(f"DEBUG AUDIO: ✓ Text field successfully populated with transcribed text: '{user_input}'")
-        else:
-            st.write(f"DEBUG AUDIO: Widget has different text than transcribed_text")
 
 with input_col2:
     # Small microphone button - positioned next to text input, same height, custom background
@@ -460,45 +620,28 @@ if audio_data is not None:
     if audio_bytes and ('last_processed_audio' not in st.session_state or st.session_state.last_processed_audio != audio_id):
         with st.spinner("Transcribing audio..."):
             try:
-                st.write(f"DEBUG AUDIO: Audio bytes length = {len(audio_bytes)}")
-                st.write(f"DEBUG AUDIO: Audio ID = {audio_id}")
-                
                 # Transcribe using Gemini 2.5 Flash
                 transcribed_text = transcribe_audio_bytes(audio_bytes, mime_type="audio/webm")
                 
-                st.write(f"DEBUG AUDIO: Transcription result = '{transcribed_text}'")
-                st.write(f"DEBUG AUDIO: Transcription length = {len(transcribed_text) if transcribed_text else 0}")
-                
-                # Debug: Check if transcription succeeded
                 if not transcribed_text or not transcribed_text.strip():
                     st.error("Transcription returned empty text. Please try recording again.")
                     st.session_state.last_processed_audio = audio_id
                 else:
                     # Store transcribed text in a temporary session state key (don't show message, don't auto-process)
-                    st.write(f"DEBUG AUDIO: Storing transcribed text in session state")
                     st.session_state.transcribed_text = transcribed_text
                     st.session_state.last_processed_audio = audio_id
-                    st.write(f"DEBUG AUDIO: Triggering rerun to populate text field")
                     st.rerun()
             except Exception as e:
                 st.error(f"Error transcribing audio: {str(e)}")
-                import traceback
-                st.write(f"DEBUG AUDIO: Full error traceback:")
-                st.code(traceback.format_exc())
                 st.session_state.last_processed_audio = audio_id  # Mark as processed even on error to avoid loop
 
 # Send button
 if st.button("Send", type="primary", use_container_width=True, key="send_btn"):
     input_text = None
     
-    # Debug: Check what we received
-    st.write(f"DEBUG: user_input = '{user_input}'")
-    st.write(f"DEBUG: user_input type = {type(user_input)}")
-    
     # Check if user entered text in the widget
     if user_input and user_input.strip():
         input_text = user_input.strip()
-        st.write(f"DEBUG: input_text = '{input_text}'")
     else:
         st.warning("Please enter some text in the text field before clicking Send.")
     
@@ -506,21 +649,17 @@ if st.button("Send", type="primary", use_container_width=True, key="send_btn"):
         try:
             # Save transcript
             save_transcript(user_id, input_text)
-            st.write(f"DEBUG: Transcript saved")
             
             # Get incomplete tasks for context
             incomplete_tasks = [t for t in all_tasks if t.get("status") != "completed"]
-            st.write(f"DEBUG: Found {len(incomplete_tasks)} incomplete tasks")
             
             # Parse input with Gemini
             with st.spinner("Processing your input..."):
                 try:
                     result = parse_user_input(input_text, incomplete_tasks)
-                    st.write(f"DEBUG: parse_user_input result = {result}")
                     
                     # Process actions
                     action_type = result.get("action_type", "")
-                    st.write(f"DEBUG: action_type = '{action_type}'")
                     
                     if action_type == "clarification":
                         st.info(result.get("clarification_question", "Could you clarify?"))
@@ -528,15 +667,12 @@ if st.button("Send", type="primary", use_container_width=True, key="send_btn"):
                         tasks_added = 0
                         # Add new tasks
                         tasks_to_add = result.get("tasks_to_add", [])
-                        st.write(f"DEBUG: tasks_to_add = {tasks_to_add}")
-                        st.write(f"DEBUG: tasks_to_add length = {len(tasks_to_add)}")
                         
                         if not tasks_to_add:
                             st.warning("No tasks to add. Gemini may not have detected a task in your input. Try being more explicit, e.g., 'Add task: Buy groceries'")
                         
                         for task_data in tasks_to_add:
                             try:
-                                st.write(f"DEBUG: Creating task: {task_data}")
                                 create_task(
                                     user_id=user_id,
                                     title=task_data.get("title"),
@@ -546,15 +682,13 @@ if st.button("Send", type="primary", use_container_width=True, key="send_btn"):
                                     reminder_time=task_data.get("reminder_time")
                                 )
                                 tasks_added += 1
-                                st.write(f"DEBUG: Task created successfully")
                             except Exception as task_error:
                                 st.error(f"Error creating task: {str(task_error)}")
-                                st.write(f"DEBUG: Task creation error details: {task_error}")
                         
                         if tasks_added == 0 and len(tasks_to_add) > 0:
-                            st.warning("No tasks were created. Check the debug output above for errors.")
+                            st.warning("No tasks were created. Please try again.")
                         elif tasks_added > 0:
-                            st.write(f"DEBUG: Successfully created {tasks_added} task(s)")
+                            pass  # Success message shown below
                         
                         # Update tasks - handle both task IDs and task titles
                         for update_data in result.get("tasks_to_update", []):
@@ -604,8 +738,8 @@ if st.button("Send", type="primary", use_container_width=True, key="send_btn"):
                         # Send update email (don't fail if email fails)
                         try:
                             send_task_update_email(user_email, user_id, "updated")
-                        except Exception as email_error:
-                            st.write(f"DEBUG: Email send failed (non-critical): {email_error}")
+                        except Exception:
+                            pass  # Email failure is non-critical
                         
                         # Clear text input after processing
                         st.session_state.clear_input = True
@@ -621,11 +755,5 @@ if st.button("Send", type="primary", use_container_width=True, key="send_btn"):
                         
                 except Exception as e:
                     st.error(f"Error processing input: {str(e)}")
-                    import traceback
-                    st.write(f"DEBUG: Full error traceback:")
-                    st.code(traceback.format_exc())
         except Exception as e:
             st.error(f"Error saving transcript: {str(e)}")
-            import traceback
-            st.write(f"DEBUG: Transcript save error traceback:")
-            st.code(traceback.format_exc())

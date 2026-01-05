@@ -1,4 +1,4 @@
--- Supabase database schema for NeverMiss
+-- Supabase database schema for Skkadoosh
 -- Uses Supabase Auth (auth.users) instead of custom users table
 
 -- Drop custom users table if it exists (migration from custom auth)

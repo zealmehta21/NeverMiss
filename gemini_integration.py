@@ -13,7 +13,7 @@ if not GEMINI_API_KEY:
     raise ValueError("GEMINI_API_KEY not configured")
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-SYSTEM_PROMPT = """You are a task management assistant for NeverMiss. Your role is to understand user input (text or transcribed voice) and extract actionable tasks, parse voice commands, and organize tasks intelligently.
+SYSTEM_PROMPT = """You are a task management assistant for Skkadoosh. Your role is to understand user input (text or transcribed voice) and extract actionable tasks, parse voice commands, and organize tasks intelligently.
 
 You must output valid JSON only - no markdown, no explanations, just pure JSON.
 
@@ -168,7 +168,7 @@ def parse_user_input(user_input: str, existing_tasks: List[Dict]) -> Dict:
         full_prompt = SYSTEM_PROMPT + "\n\n" + prompt
 
         # Pick best MVP model (balance)
-        model_name = "models/gemini-2.5-flash"
+        model_name = "models/gemini-flash-latest"
 
         response = client.models.generate_content(
             model=model_name,
@@ -214,7 +214,7 @@ def parse_voice_command(command: str, existing_tasks: List[Dict]) -> Dict:
         
         full_prompt = SYSTEM_PROMPT + "\n\n" + prompt
 
-        model_name = "models/gemini-2.5-flash"
+        model_name = "models/gemini-flash-latest"
 
         response = client.models.generate_content(
             model=model_name,

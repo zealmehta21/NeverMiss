@@ -1,5 +1,5 @@
 """
-Configuration file for NeverMiss app
+Configuration file for Skkadoosh app
 """
 import os
 from dotenv import load_dotenv

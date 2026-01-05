@@ -1,6 +1,6 @@
-# NeverMiss - Voice-First Task Management
+# Skkadoosh - Voice-First Task Management
 
-**Turn your voice into prioritized actions** - NeverMiss is an AI-powered task management web application built with Python and Streamlit. Speak or type your tasks, reminders, commitments, ideas, or project notes, and the AI converts them into an organized, prioritized task list.
+**Turn your voice into prioritized actions** - Skkadoosh is an AI-powered task management web application built with Python and Streamlit. Speak or type your tasks, reminders, commitments, ideas, or project notes, and the AI converts them into an organized, prioritized task list.
 
 ## 🎯 Key Features
 
@@ -49,7 +49,7 @@
 
 ```bash
 git clone <repository-url>
-cd NeverMiss
+cd Skkadoosh
 ```
 
 ### 2. Install Dependencies
@@ -188,7 +188,7 @@ Deploy to Streamlit Cloud, Heroku, or any platform supporting Python:
 ## 📁 Project Structure
 
 ```
-NeverMiss/
+Skkadoosh/
 ├── app.py                    # Main entry point
 ├── pages/
 │   ├── 1_Landing.py         # Landing page
@@ -214,10 +214,10 @@ NeverMiss/
 The app uses a custom design system:
 
 - **Colors**:
-  - Primary: `#B88E23`
-  - Secondary: `#5C4E3D`
+  - Primary: `#ff4b4b`
+  - Secondary: `#FF6B6B`
   - Text: `#454240`
-  - Background: `#FFFDFA`
+  - Background: `#ffffff`
 
 - **Fonts**:
   - Headings: Libre Baskerville (Regular)
@@ -282,6 +282,6 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ---
 
-**NeverMiss** - Never miss a task again! ✅
+**Skkadoosh** - Never miss a task again! ✅
 
 Built with ❤️ using Python and Streamlit

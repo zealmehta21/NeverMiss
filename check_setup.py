@@ -1,11 +1,11 @@
 """
-Diagnostic script to check if NeverMiss is set up correctly
+Diagnostic script to check if Skkadoosh is set up correctly
 """
 import sys
 import os
 
 print("=" * 60)
-print("NeverMiss Setup Diagnostic Check")
+print("Skkadoosh Setup Diagnostic Check")
 print("=" * 60)
 print()
 
