@@ -21,7 +21,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# Custom CSS with theme detection
+# Custom CSS with theme detection and timezone detection
 st.markdown("""
 <script>
     // Detect system theme preference
@@ -35,11 +35,37 @@ st.markdown("""
         });
     }
     
+    // Detect user timezone
+    function detectTimezone() {
+        try {
+            const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            const timezoneOffset = new Date().getTimezoneOffset();
+            // Store in a hidden input that Streamlit can read
+            const timezoneInput = document.getElementById('user_timezone');
+            if (timezoneInput) {
+                timezoneInput.value = timezone;
+            } else {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.id = 'user_timezone';
+                input.name = 'user_timezone';
+                input.value = timezone;
+                document.body.appendChild(input);
+            }
+        } catch (e) {
+            console.error('Error detecting timezone:', e);
+        }
+    }
+    
     // Run on page load
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', detectTheme);
+        document.addEventListener('DOMContentLoaded', function() {
+            detectTheme();
+            detectTimezone();
+        });
     } else {
         detectTheme();
+        detectTimezone();
     }
 </script>
 <style>
@@ -235,6 +261,48 @@ st.markdown("""
     [data-theme="dark"] [data-testid="stAudioInput"] button:not(:disabled):hover {
         box-shadow: 0 0 8px rgba(255, 107, 107, 0.5) !important;
     }
+    
+    /* Make download and clear buttons visible */
+    [data-testid="stAudioInput"] a,
+    [data-testid="stAudioInput"] button[aria-label*="download"],
+    [data-testid="stAudioInput"] button[aria-label*="clear"],
+    [data-testid="stAudioInput"] a[download] {
+        opacity: 1 !important;
+        visibility: visible !important;
+        display: inline-block !important;
+        background-color: var(--button-primary) !important;
+        color: white !important;
+        padding: 8px 16px !important;
+        border-radius: 5px !important;
+        margin: 5px !important;
+        font-size: 14px !important;
+        font-weight: 500 !important;
+        text-decoration: none !important;
+        border: none !important;
+        cursor: pointer !important;
+    }
+    
+    [data-testid="stAudioInput"] a:hover,
+    [data-testid="stAudioInput"] button[aria-label*="download"]:hover,
+    [data-testid="stAudioInput"] button[aria-label*="clear"]:hover {
+        background-color: var(--button-primary-hover) !important;
+        opacity: 1 !important;
+    }
+    
+    /* Style the audio player controls */
+    [data-testid="stAudioInput"] audio {
+        width: 100% !important;
+        margin: 10px 0 !important;
+    }
+    
+    /* Make the entire audio input container more visible */
+    [data-testid="stAudioInput"] {
+        padding: 10px !important;
+        background-color: var(--mic-bg) !important;
+        border: 1px solid var(--border-color) !important;
+        border-radius: 5px !important;
+        margin: 10px 0 !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -253,6 +321,57 @@ if 'current_view' not in st.session_state:
     st.session_state.current_view = "today"
 if 'last_input' not in st.session_state:
     st.session_state.last_input = None
+
+# Detect user timezone from browser
+if 'user_timezone' not in st.session_state:
+    # Try to get timezone from query params (set by JavaScript)
+    timezone_param = st.query_params.get("tz", None)
+    if timezone_param:
+        st.session_state.user_timezone = timezone_param
+        # Clear the query param to avoid reload loop
+        st.query_params.clear()
+    else:
+        # Default to system timezone or LA as fallback
+        try:
+            import time
+            tz_name = time.tzname[0] if time.daylight == 0 else time.tzname[1]
+            # Try to map to pytz timezone
+            tz_mapping = {
+                'PST': 'America/Los_Angeles',
+                'PDT': 'America/Los_Angeles',
+                'EST': 'America/New_York',
+                'EDT': 'America/New_York',
+                'CST': 'America/Chicago',
+                'CDT': 'America/Chicago',
+                'MST': 'America/Denver',
+                'MDT': 'America/Denver',
+            }
+            st.session_state.user_timezone = tz_mapping.get(tz_name, 'America/Los_Angeles')
+        except:
+            st.session_state.user_timezone = 'America/Los_Angeles'
+
+# Add JavaScript to detect and send timezone to Streamlit (only if not already set)
+if 'user_timezone' not in st.session_state or st.query_params.get("tz") is not None:
+    st.markdown("""
+    <script>
+        // Detect timezone and send to Streamlit via query params (only once)
+        if (!window.timezoneDetected) {
+            const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            const currentUrl = new URL(window.location);
+            if (!currentUrl.searchParams.has('tz')) {
+                currentUrl.searchParams.set('tz', timezone);
+                window.history.replaceState({}, '', currentUrl);
+                window.timezoneDetected = true;
+                // Trigger a rerun to update session state
+                setTimeout(() => {
+                    window.location.reload();
+                }, 100);
+            } else {
+                window.timezoneDetected = true;
+            }
+        }
+    </script>
+    """, unsafe_allow_html=True)
 
 # Main content area
 # Header with title and logout button
@@ -632,7 +751,19 @@ if audio_data is not None:
                     st.session_state.last_processed_audio = audio_id
                     st.rerun()
             except Exception as e:
-                st.error(f"Error transcribing audio: {str(e)}")
+                error_msg = str(e)
+                # Show detailed error message
+                st.error(f"❌ **Error transcribing audio:** {error_msg}")
+                
+                # Show full error details in expander for debugging
+                with st.expander("🔍 Show detailed error information"):
+                    import traceback
+                    st.code(traceback.format_exc(), language="python")
+                    st.write("**Error type:**", type(e).__name__)
+                    st.write("**Error message:**", str(e))
+                
+                st.info("💡 **Tips:**\n- Make sure your microphone is working\n- Check your internet connection\n- Verify your Gemini API key is valid\n- Try recording again with clear audio")
+                
                 st.session_state.last_processed_audio = audio_id  # Mark as processed even on error to avoid loop
 
 # Send button
@@ -656,7 +787,8 @@ if st.button("Send", type="primary", use_container_width=True, key="send_btn"):
             # Parse input with Gemini
             with st.spinner("Processing your input..."):
                 try:
-                    result = parse_user_input(input_text, incomplete_tasks)
+                    user_tz = st.session_state.get('user_timezone', 'America/Los_Angeles')
+                    result = parse_user_input(input_text, incomplete_tasks, user_timezone=user_tz)
                     
                     # Process actions
                     action_type = result.get("action_type", "")

@@ -113,5 +113,14 @@ def transcribe_audio_bytes(audio_bytes: bytes, mime_type: str = "audio/webm") ->
                     pass
                 
     except Exception as e:
-        raise Exception(f"Error transcribing audio with Gemini: {str(e)}")
+        error_details = str(e)
+        # Provide more helpful error messages
+        if "API key" in error_details or "authentication" in error_details.lower():
+            raise Exception(f"Gemini API authentication error: {error_details}. Please check your GEMINI_API_KEY in .env file.")
+        elif "quota" in error_details.lower() or "limit" in error_details.lower():
+            raise Exception(f"Gemini API quota exceeded: {error_details}. Please check your API usage limits.")
+        elif "model" in error_details.lower() or "not found" in error_details.lower():
+            raise Exception(f"Gemini model error: {error_details}. The model may not be available.")
+        else:
+            raise Exception(f"Error transcribing audio with Gemini: {error_details}")
 

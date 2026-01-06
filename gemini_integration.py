@@ -31,7 +31,11 @@ Always consider the current date and time when interpreting relative dates like 
 PLANNER_PROMPT_TEMPLATE = """Given the user input and their current task list, determine what actions to take.
 
 Current DateTime: {current_datetime}
-Timezone: America/Los_Angeles
+User Timezone: {user_timezone}
+
+IMPORTANT: When the user mentions a time (e.g., "10am", "3pm", "2:30pm"), interpret it in the user's timezone ({user_timezone}). 
+For example, if the user says "my appointment is at 10am", they mean 10am in {user_timezone}, not in any other timezone.
+Always output times in ISO 8601 format with the correct timezone offset.
 
 User Input: "{user_input}"
 
@@ -86,6 +90,10 @@ COMMAND_PARSER_PROMPT_TEMPLATE = """Parse this voice command and identify the ac
 Command: "{command}"
 Existing Tasks: {existing_tasks}
 Current DateTime: {current_datetime}
+User Timezone: {user_timezone}
+
+IMPORTANT: When the user mentions a time (e.g., "10am", "3pm", "2:30pm"), interpret it in the user's timezone ({user_timezone}).
+Always output times in ISO 8601 format with the correct timezone offset.
 
 Output JSON:
 {{
@@ -103,9 +111,9 @@ Output JSON:
 }}
 """
 
-def get_current_datetime_str() -> str:
-    """Get current datetime string in LA timezone"""
-    tz = pytz.timezone("America/Los_Angeles")
+def get_current_datetime_str(timezone: str = "America/Los_Angeles") -> str:
+    """Get current datetime string in specified timezone"""
+    tz = pytz.timezone(timezone)
     return datetime.now(tz).isoformat()
 
 def format_existing_tasks_for_prompt(tasks: List[Dict]) -> str:
@@ -151,17 +159,18 @@ def match_task_id_by_reference(reference: str, tasks: List[Dict]) -> str:
     
     return best_match if best_match and best_score > 0.3 else None
 
-def parse_user_input(user_input: str, existing_tasks: List[Dict]) -> Dict:
+def parse_user_input(user_input: str, existing_tasks: List[Dict], user_timezone: str = "America/Los_Angeles") -> Dict:
     """Parse user input using Gemini and return structured JSON"""
     if not GEMINI_API_KEY:
         raise ValueError("GEMINI_API_KEY not configured")
     
     try:
         existing_tasks_formatted = format_existing_tasks_for_prompt(existing_tasks)
-        current_datetime = get_current_datetime_str()
+        current_datetime = get_current_datetime_str(user_timezone)
         
         prompt = PLANNER_PROMPT_TEMPLATE.format(
             current_datetime=current_datetime,
+            user_timezone=user_timezone,
             user_input=user_input,
             existing_tasks=existing_tasks_formatted
         )
@@ -197,19 +206,20 @@ def parse_user_input(user_input: str, existing_tasks: List[Dict]) -> Dict:
     except Exception as e:
         raise Exception(f"Error calling Gemini API: {str(e)}")
 
-def parse_voice_command(command: str, existing_tasks: List[Dict]) -> Dict:
+def parse_voice_command(command: str, existing_tasks: List[Dict], user_timezone: str = "America/Los_Angeles") -> Dict:
     """Parse a specific voice command"""
     if not GEMINI_API_KEY:
         raise ValueError("GEMINI_API_KEY not configured")
     
     try:
         existing_tasks_formatted = format_existing_tasks_for_prompt(existing_tasks)
-        current_datetime = get_current_datetime_str()
+        current_datetime = get_current_datetime_str(user_timezone)
         
         prompt = COMMAND_PARSER_PROMPT_TEMPLATE.format(
             command=command,
             existing_tasks=existing_tasks_formatted,
-            current_datetime=current_datetime
+            current_datetime=current_datetime,
+            user_timezone=user_timezone
         )
         
         full_prompt = SYSTEM_PROMPT + "\n\n" + prompt
