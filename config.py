@@ -19,5 +19,5 @@ SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_EMAIL = os.getenv("SMTP_EMAIL", "")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 
-# Timezone
-TIMEZONE = "America/Los_Angeles"
+# Timezone - will be detected from browser, default to UTC for server operations
+TIMEZONE = "UTC"  # Default for server-side operations, user timezone detected from browser

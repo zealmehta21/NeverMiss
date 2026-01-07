@@ -164,7 +164,7 @@ def create_task(user_id: str, title: str, description: str = "",
         "priority": priority,  # low, medium, high, p0
         "reminder_time": reminder_time,
         "status": status,  # pending, completed, snoozed
-        "created_at": datetime.now(pytz.timezone("America/Los_Angeles")).isoformat(),
+        "created_at": datetime.now(pytz.UTC).isoformat(),
         "completed_at": None
     }
     
@@ -194,7 +194,7 @@ def update_task(task_id: str, user_id: str, **updates) -> Dict:
     """Update a task (user_id parameter kept for compatibility, but RLS ensures only user's tasks can be updated)"""
     supabase = get_authenticated_client()
     # Add updated_at timestamp
-    updates["updated_at"] = datetime.now(pytz.timezone("America/Los_Angeles")).isoformat()
+    updates["updated_at"] = datetime.now(pytz.UTC).isoformat()
     
     try:
         result = supabase.table("tasks").update(updates).eq("id", task_id).execute()
@@ -208,10 +208,9 @@ def delete_task(task_id: str, user_id: str):
 
 def mark_task_complete(task_id: str, user_id: str):
     """Mark task as complete (user_id parameter kept for compatibility, but RLS ensures only user's tasks can be updated)"""
-    tz = pytz.timezone("America/Los_Angeles")
     return update_task(task_id, user_id, 
                       status="completed",
-                      completed_at=datetime.now(tz).isoformat())
+                      completed_at=datetime.now(pytz.UTC).isoformat())
 
 def snooze_task(task_id: str, user_id: str, snooze_until: str):
     """Snooze a task until specified time (user_id parameter kept for compatibility, but RLS ensures only user's tasks can be updated)"""
@@ -225,7 +224,7 @@ def save_transcript(user_id: str, transcript_text: str) -> Dict:
     supabase = get_authenticated_client()
     transcript_data = {
         "transcript_text": transcript_text,
-        "created_at": datetime.now(pytz.timezone("America/Los_Angeles")).isoformat()
+        "created_at": datetime.now(pytz.UTC).isoformat()
     }
     
     try:

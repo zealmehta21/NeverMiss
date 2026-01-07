@@ -322,7 +322,10 @@ if 'current_view' not in st.session_state:
 if 'last_input' not in st.session_state:
     st.session_state.last_input = None
 
-# Detect user timezone from browser
+# Detect user timezone from browser - NEVER DEFAULT TO UTC
+# ABSOLUTE RULE: If user location is known (NY/NJ), use America/New_York
+# Only use UTC as absolute last resort, and FAIL LOUDLY
+
 if 'user_timezone' not in st.session_state:
     # Try to get timezone from query params (set by JavaScript)
     timezone_param = st.query_params.get("tz", None)
@@ -331,11 +334,12 @@ if 'user_timezone' not in st.session_state:
         # Clear the query param to avoid reload loop
         st.query_params.clear()
     else:
-        # Default to system timezone or LA as fallback
+        # Try to detect from system timezone
+        detected_tz = None
         try:
             import time
             tz_name = time.tzname[0] if time.daylight == 0 else time.tzname[1]
-            # Try to map to pytz timezone
+            # Map to pytz timezone
             tz_mapping = {
                 'PST': 'America/Los_Angeles',
                 'PDT': 'America/Los_Angeles',
@@ -346,30 +350,73 @@ if 'user_timezone' not in st.session_state:
                 'MST': 'America/Denver',
                 'MDT': 'America/Denver',
             }
-            st.session_state.user_timezone = tz_mapping.get(tz_name, 'America/Los_Angeles')
+            detected_tz = tz_mapping.get(tz_name, None)
         except:
-            st.session_state.user_timezone = 'America/Los_Angeles'
+            pass
+        
+        # If we couldn't detect, use America/New_York as default (user is in NY/NJ)
+        # NEVER silently default to UTC
+        if not detected_tz:
+            detected_tz = 'America/New_York'  # Default for NY/NJ users
+            st.warning("⚠️ Could not detect timezone from browser. Using America/New_York as default. Please refresh the page to detect your timezone.")
+        
+        st.session_state.user_timezone = detected_tz
+
+# Get user timezone - NEVER allow UTC unless explicitly set
+user_tz = st.session_state.get('user_timezone', 'America/New_York')
+
+# GUARDRAIL: Fail loudly if timezone is UTC unexpectedly
+if user_tz == 'UTC':
+    st.error("🚨 CRITICAL ERROR: User timezone is UTC! This should never happen. Using America/New_York as fallback.")
+    user_tz = 'America/New_York'
+    st.session_state.user_timezone = 'America/New_York'
+
+# Show detected timezone for debugging (temporary - remove after fixing)
+with st.expander("🔍 Debug: Timezone Info", expanded=False):
+    st.write(f"**Detected timezone:** {user_tz}")
+    from datetime import datetime
+    import pytz
+    tz = pytz.timezone(user_tz)
+    current_time = datetime.now(tz)
+    st.write(f"**Current time in your timezone:** {current_time.strftime('%I:%M %p %Z')}")
+    st.write(f"**Current time UTC:** {datetime.utcnow().strftime('%I:%M %p UTC')}")
 
 # Add JavaScript to detect and send timezone to Streamlit (only if not already set)
-if 'user_timezone' not in st.session_state or st.query_params.get("tz") is not None:
+# This runs on every page load until timezone is detected
+if 'user_timezone' not in st.session_state or st.session_state.get('user_timezone') == 'UTC':
     st.markdown("""
     <script>
-        // Detect timezone and send to Streamlit via query params (only once)
-        if (!window.timezoneDetected) {
-            const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-            const currentUrl = new URL(window.location);
-            if (!currentUrl.searchParams.has('tz')) {
-                currentUrl.searchParams.set('tz', timezone);
-                window.history.replaceState({}, '', currentUrl);
-                window.timezoneDetected = true;
-                // Trigger a rerun to update session state
-                setTimeout(() => {
-                    window.location.reload();
-                }, 100);
-            } else {
-                window.timezoneDetected = true;
+        // Detect timezone and send to Streamlit via query params
+        (function() {
+            try {
+                const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                console.log('🌍 Detected browser timezone:', timezone);
+                
+                // Validate timezone is not UTC
+                if (timezone === 'UTC') {
+                    console.warn('⚠️ Browser timezone is UTC - this is unusual. Using America/New_York as fallback.');
+                    // Don't set UTC - let Python code handle fallback
+                    return;
+                }
+                
+                const currentUrl = new URL(window.location);
+                const existingTz = currentUrl.searchParams.get('tz');
+                
+                // Only update if timezone changed or not set
+                if (!existingTz || existingTz !== timezone) {
+                    currentUrl.searchParams.set('tz', timezone);
+                    window.history.replaceState({}, '', currentUrl);
+                    console.log('✅ Timezone set in URL:', timezone);
+                    
+                    // Trigger a rerun to update session state
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 50);
+                }
+            } catch (e) {
+                console.error('❌ Error detecting timezone:', e);
             }
-        }
+        })();
     </script>
     """, unsafe_allow_html=True)
 
@@ -413,7 +460,8 @@ all_tasks = get_tasks(user_id)
 
 # Display tasks based on current view (no header - navigation shows the view)
 if st.session_state.current_view in ["today", "week", "upcoming"]:
-    view_tasks = filter_tasks_by_view(all_tasks, st.session_state.current_view)
+    user_tz = st.session_state.get('user_timezone', 'UTC')
+    view_tasks = filter_tasks_by_view(all_tasks, st.session_state.current_view, user_timezone=user_tz)
     
     if not view_tasks:
         st.info(f"No tasks for {st.session_state.current_view}. Add a task below!")
@@ -430,13 +478,21 @@ if st.session_state.current_view in ["today", "week", "upcoming"]:
                     due_date_str = task.get('due_date', '') if task.get('due_date') else 'No due date'
                     if due_date_str != 'No due date':
                         try:
-                            # Use local timezone (browser/client timezone)
+                            # Parse the stored datetime (already in user's timezone with correct offset)
+                            # Just parse and display - NO conversion needed
                             dt = datetime.fromisoformat(due_date_str.replace('Z', '+00:00'))
-                            # Convert to local timezone
-                            local_tz = datetime.now().astimezone().tzinfo
-                            dt = dt.astimezone(local_tz)
+                            # Display in the timezone it was stored in (user's timezone)
+                            # Get user timezone from session state or use stored timezone
+                            if 'user_timezone' in st.session_state:
+                                user_tz = pytz.timezone(st.session_state['user_timezone'])
+                                # Convert to user's timezone for display (should be same, but ensures consistency)
+                                if dt.tzinfo:
+                                    dt = dt.astimezone(user_tz)
+                                else:
+                                    dt = user_tz.localize(dt)
                             due_date_str = dt.strftime("%b %d, %Y %I:%M %p")
-                        except:
+                        except Exception as e:
+                            # If parsing fails, show raw string
                             pass
                     
                     st.markdown(f"""
@@ -499,9 +555,15 @@ if st.session_state.current_view in ["today", "week", "upcoming"]:
                             existing_time = None
                             if task.get('due_date'):
                                 try:
+                                    # Parse stored datetime (already in user's timezone)
                                     dt = datetime.fromisoformat(task.get('due_date').replace('Z', '+00:00'))
-                                    local_tz = datetime.now().astimezone().tzinfo
-                                    dt = dt.astimezone(local_tz)
+                                    # Convert to user's current timezone for editing
+                                    if 'user_timezone' in st.session_state:
+                                        user_tz = pytz.timezone(st.session_state['user_timezone'])
+                                        if dt.tzinfo:
+                                            dt = dt.astimezone(user_tz)
+                                        else:
+                                            dt = user_tz.localize(dt)
                                     existing_date = dt.date()
                                     existing_time = dt.time()
                                 except:
@@ -787,7 +849,14 @@ if st.button("Send", type="primary", use_container_width=True, key="send_btn"):
             # Parse input with Gemini
             with st.spinner("Processing your input..."):
                 try:
-                    user_tz = st.session_state.get('user_timezone', 'America/Los_Angeles')
+                    # Get user timezone - MUST be set and NOT UTC
+                    user_tz = st.session_state.get('user_timezone', 'America/New_York')
+                    if user_tz == 'UTC':
+                        st.error("🚨 CRITICAL: User timezone is UTC! Using America/New_York as fallback.")
+                        user_tz = 'America/New_York'
+                        st.session_state.user_timezone = 'America/New_York'
+                    
+                    # user_timezone is now REQUIRED - no default
                     result = parse_user_input(input_text, incomplete_tasks, user_timezone=user_tz)
                     
                     # Process actions
@@ -805,17 +874,52 @@ if st.button("Send", type="primary", use_container_width=True, key="send_btn"):
                         
                         for task_data in tasks_to_add:
                             try:
+                                # Normalize dates to user's timezone
+                                from gemini_integration import normalize_datetime_to_timezone
+                                due_date = task_data.get("due_date")
+                                reminder_time = task_data.get("reminder_time")
+                                
+                                # Debug: Show what Gemini returned and validate
+                                if due_date:
+                                    st.write(f"🔍 Debug: Gemini returned due_date: {due_date}")
+                                    original_hour = None
+                                    try:
+                                        # Extract hour from Gemini's response for validation
+                                        import re
+                                        time_match = re.search(r'T(\d{2}):(\d{2})', due_date)
+                                        if time_match:
+                                            original_hour = int(time_match.group(1))
+                                    except:
+                                        pass
+                                    
+                                    due_date = normalize_datetime_to_timezone(due_date, user_tz)
+                                    st.write(f"🔍 Debug: Normalized to {user_tz}: {due_date}")
+                                    
+                                    # Validate: hour should be preserved
+                                    if original_hour is not None:
+                                        try:
+                                            normalized_hour = int(due_date.split('T')[1].split(':')[0])
+                                            if normalized_hour != original_hour:
+                                                st.warning(f"⚠️ WARNING: Hour changed from {original_hour} to {normalized_hour} - this should not happen!")
+                                        except:
+                                            pass
+                                
+                                if reminder_time:
+                                    reminder_time = normalize_datetime_to_timezone(reminder_time, user_tz)
+                                
                                 create_task(
                                     user_id=user_id,
                                     title=task_data.get("title"),
                                     description=task_data.get("description", ""),
-                                    due_date=task_data.get("due_date"),
+                                    due_date=due_date,
                                     priority=task_data.get("priority", "medium"),
-                                    reminder_time=task_data.get("reminder_time")
+                                    reminder_time=reminder_time
                                 )
                                 tasks_added += 1
                             except Exception as task_error:
                                 st.error(f"Error creating task: {str(task_error)}")
+                                import traceback
+                                st.exception(task_error)
                         
                         if tasks_added == 0 and len(tasks_to_add) > 0:
                             st.warning("No tasks were created. Please try again.")

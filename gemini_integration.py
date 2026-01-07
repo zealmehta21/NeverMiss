@@ -33,9 +33,41 @@ PLANNER_PROMPT_TEMPLATE = """Given the user input and their current task list, d
 Current DateTime: {current_datetime}
 User Timezone: {user_timezone}
 
-IMPORTANT: When the user mentions a time (e.g., "10am", "3pm", "2:30pm"), interpret it in the user's timezone ({user_timezone}). 
-For example, if the user says "my appointment is at 10am", they mean 10am in {user_timezone}, not in any other timezone.
-Always output times in ISO 8601 format with the correct timezone offset.
+CRITICAL TIMEZONE RULES - FOLLOW EXACTLY:
+- User's timezone: {user_timezone}
+- Current date/time in user's timezone: {current_datetime}
+
+ABSOLUTE RULES - THE USER'S SPOKEN TIME IS AUTHORITATIVE:
+1. When user says a time (e.g., "4pm", "10pm", "3pm", "1:00 PM"), output that EXACT hour in {user_timezone}
+2. NEVER convert to UTC. NEVER use 'Z' suffix. NEVER output UTC times.
+3. NEVER convert the hour. If user says "4pm", output hour=16 (4pm in 24-hour), NOT the UTC equivalent.
+4. ALWAYS output with timezone offset for {user_timezone} (e.g., "-05:00", "-08:00", "-04:00")
+5. Use 24-hour format for times (e.g., "10pm" = "22:00", "3pm" = "15:00", "4pm" = "16:00")
+
+CRITICAL: The hour in your output MUST match what the user said:
+- User says "4pm" → hour MUST be 16 (not 21, not 9, not any other number)
+- User says "10pm" → hour MUST be 22 (not 3, not 15, not any other number)
+- User says "3pm" → hour MUST be 15 (not 20, not 8, not any other number)
+
+EXAMPLES:
+- User says "4pm" in America/New_York on Jan 11, 2026:
+  OUTPUT: "2026-01-11T16:00:00-05:00" (4pm EST, hour=16)
+  NEVER: "2026-01-11T21:00:00Z" (9pm UTC - WRONG! hour changed from 16 to 21)
+  NEVER: "2026-01-11T16:00:00Z" (UTC - WRONG! missing timezone offset)
+  
+- User says "10pm" in America/New_York on Jan 8, 2026:
+  OUTPUT: "2026-01-08T22:00:00-05:00" (10pm EST, hour=22)
+  NEVER: "2026-01-09T03:00:00Z" (3am UTC next day - WRONG! hour changed from 22 to 3)
+  
+- User says "3pm" in America/New_York:
+  OUTPUT: "2026-01-08T15:00:00-05:00" (3pm EST, hour=15)
+  NEVER: "2026-01-08T20:00:00Z" (8pm UTC - WRONG! hour changed from 15 to 20)
+
+- User says "1:00 PM":
+  OUTPUT: "2026-01-08T13:00:00-05:00" (1pm EST, hour=13)
+  NEVER: UTC or any other timezone
+
+Use {current_datetime} to determine the correct offset for today's date in {user_timezone}.
 
 User Input: "{user_input}"
 
@@ -111,10 +143,118 @@ Output JSON:
 }}
 """
 
-def get_current_datetime_str(timezone: str = "America/Los_Angeles") -> str:
-    """Get current datetime string in specified timezone"""
-    tz = pytz.timezone(timezone)
-    return datetime.now(tz).isoformat()
+def get_current_datetime_str(timezone: str) -> str:
+    """
+    Get current datetime string in the specified timezone.
+    
+    GUARDRAIL: NEVER use UTC unless explicitly required.
+    If timezone is UTC, log and use America/New_York as fallback.
+    """
+    # GUARDRAIL: Fail loudly if timezone is UTC unexpectedly
+    if timezone == "UTC":
+        print(f"⚠️ WARNING: get_current_datetime_str() called with UTC timezone!")
+        print(f"This should not happen for user-facing operations. Using America/New_York as fallback.")
+        timezone = "America/New_York"
+    
+    try:
+        tz = pytz.timezone(timezone)
+        return datetime.now(tz).isoformat()
+    except Exception as e:
+        print(f"ERROR: Invalid timezone '{timezone}': {e}. Using America/New_York as fallback.")
+        tz = pytz.timezone("America/New_York")
+        return datetime.now(tz).isoformat()
+
+def normalize_datetime_to_timezone(dt_str: str, target_timezone: str) -> str:
+    """
+    Normalize a datetime string to a specific timezone.
+    
+    ABSOLUTE RULES (NO EXCEPTIONS):
+    1. SPOKEN TIME IS AUTHORITATIVE - NEVER convert it
+    2. NEVER convert spoken times to UTC
+    3. NEVER trust Gemini's timezone math
+    4. NEVER call astimezone() on spoken times
+    5. ALWAYS rebuild datetime using localize() in user's timezone
+    
+    This function:
+    - Strips ALL timezone info from Gemini output
+    - Extracts ONLY: year, month, day, hour, minute
+    - Rebuilds datetime using localize() - NEVER converts
+    """
+    if not dt_str:
+        return None
+    
+    try:
+        target_tz = pytz.timezone(target_timezone)
+        
+        # STEP 1: Strip ALL timezone information completely
+        import re
+        # Remove 'Z' (UTC marker)
+        dt_str_clean = dt_str.replace('Z', '')
+        # Remove timezone offsets like +00:00, -05:00, +08:00
+        dt_str_clean = re.sub(r'[+-]\d{2}:\d{2}$', '', dt_str_clean)
+        # Remove microseconds if present
+        if '.' in dt_str_clean:
+            dt_str_clean = dt_str_clean.split('.')[0]
+        
+        # STEP 2: Parse ONLY date/time components (year, month, day, hour, minute, second)
+        # Extract components manually to be absolutely sure
+        try:
+            if 'T' in dt_str_clean:
+                date_part, time_part = dt_str_clean.split('T')
+                year, month, day = map(int, date_part.split('-'))
+                time_components = time_part.split(':')
+                hour = int(time_components[0])
+                minute = int(time_components[1]) if len(time_components) > 1 else 0
+                second = int(time_components[2]) if len(time_components) > 2 else 0
+            else:
+                # Just a date
+                year, month, day = map(int, dt_str_clean.split('-'))
+                now = datetime.now(target_tz)
+                hour = now.hour
+                minute = now.minute
+                second = now.second
+        except (ValueError, IndexError) as e:
+            # Fallback: try fromisoformat, but extract components to avoid any timezone issues
+            try:
+                # Use fromisoformat but immediately extract components (don't trust it for timezone)
+                dt_naive = datetime.fromisoformat(dt_str_clean.split('.')[0])
+                # CRITICAL: Extract components directly - don't use dt_naive if it has timezone
+                # If fromisoformat created a timezone-aware datetime, we need to be careful
+                if dt_naive.tzinfo is not None:
+                    # This shouldn't happen if we stripped timezone, but handle it
+                    # Convert to naive by extracting components
+                    year, month, day = dt_naive.year, dt_naive.month, dt_naive.day
+                    hour, minute, second = dt_naive.hour, dt_naive.minute, dt_naive.second or 0
+                else:
+                    # Naive datetime - safe to use
+                    year, month, day = dt_naive.year, dt_naive.month, dt_naive.day
+                    hour, minute, second = dt_naive.hour, dt_naive.minute, dt_naive.second or 0
+            except Exception as e2:
+                raise ValueError(f"Cannot parse datetime components from: {dt_str_clean}. Error: {e}, {e2}")
+        
+        # STEP 3: Rebuild datetime in target timezone with EXACT hour/minute
+        # CRITICAL: Use localize() - NEVER astimezone()
+        # This creates a NEW datetime in target timezone with the exact hour/minute
+        dt = target_tz.localize(datetime(year, month, day, hour, minute, second))
+        
+        # STEP 4: GUARDRAIL - Verify hour is preserved (should always be true with localize())
+        # This is a safety check - localize() should never change the hour
+        if dt.hour != hour:
+            error_msg = f"CRITICAL ERROR: Hour mismatch! Input hour: {hour}, Output hour: {dt.hour}. Input: {dt_str}, Cleaned: {dt_str_clean}, Components: {year}-{month}-{day} {hour}:{minute}:{second}, Timezone: {target_timezone}"
+            print(error_msg)
+            # This should never happen with localize(), but if it does, raise an error
+            raise ValueError(error_msg)
+        
+        # STEP 5: Return ISO format with correct DST-aware offset
+        result = dt.isoformat()
+        print(f"✓ Normalized: {dt_str} -> {result} (hour preserved: {hour}, timezone: {target_timezone})")
+        return result
+        
+    except Exception as e:
+        print(f"ERROR normalizing datetime {dt_str} to {target_timezone}: {e}")
+        import traceback
+        traceback.print_exc()
+        return dt_str
 
 def format_existing_tasks_for_prompt(tasks: List[Dict]) -> str:
     """Format existing tasks for Gemini prompt"""
@@ -159,10 +299,22 @@ def match_task_id_by_reference(reference: str, tasks: List[Dict]) -> str:
     
     return best_match if best_match and best_score > 0.3 else None
 
-def parse_user_input(user_input: str, existing_tasks: List[Dict], user_timezone: str = "America/Los_Angeles") -> Dict:
-    """Parse user input using Gemini and return structured JSON"""
+def parse_user_input(user_input: str, existing_tasks: List[Dict], user_timezone: str) -> Dict:
+    """
+    Parse user input using Gemini and return structured JSON.
+    
+    REQUIRED: user_timezone must be a valid timezone (e.g., 'America/New_York').
+    NEVER pass 'UTC' - this will cause incorrect time parsing.
+    """
     if not GEMINI_API_KEY:
         raise ValueError("GEMINI_API_KEY not configured")
+    
+    if not user_timezone:
+        raise ValueError("CRITICAL ERROR: user_timezone is required and cannot be empty!")
+    
+    # GUARDRAIL: Assert timezone is NOT UTC before sending to Gemini
+    if user_timezone == "UTC":
+        raise ValueError("CRITICAL ERROR: user_timezone is UTC! Cannot parse times correctly. Must use a real timezone like 'America/New_York'.")
     
     try:
         existing_tasks_formatted = format_existing_tasks_for_prompt(existing_tasks)
@@ -206,10 +358,22 @@ def parse_user_input(user_input: str, existing_tasks: List[Dict], user_timezone:
     except Exception as e:
         raise Exception(f"Error calling Gemini API: {str(e)}")
 
-def parse_voice_command(command: str, existing_tasks: List[Dict], user_timezone: str = "America/Los_Angeles") -> Dict:
-    """Parse a specific voice command"""
+def parse_voice_command(command: str, existing_tasks: List[Dict], user_timezone: str) -> Dict:
+    """
+    Parse a specific voice command.
+    
+    REQUIRED: user_timezone must be a valid timezone (e.g., 'America/New_York').
+    NEVER pass 'UTC' - this will cause incorrect time parsing.
+    """
     if not GEMINI_API_KEY:
         raise ValueError("GEMINI_API_KEY not configured")
+    
+    if not user_timezone:
+        raise ValueError("CRITICAL ERROR: user_timezone is required and cannot be empty!")
+    
+    # GUARDRAIL: Assert timezone is NOT UTC before sending to Gemini
+    if user_timezone == "UTC":
+        raise ValueError("CRITICAL ERROR: user_timezone is UTC! Cannot parse times correctly. Must use a real timezone like 'America/New_York'.")
     
     try:
         existing_tasks_formatted = format_existing_tasks_for_prompt(existing_tasks)

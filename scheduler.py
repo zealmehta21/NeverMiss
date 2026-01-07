@@ -26,7 +26,7 @@ def send_daily_reminders():
         # For demonstration, we'll assume we have a way to get all user emails
         # In practice, you might maintain a users table with email preferences
         
-        tz = pytz.timezone("America/Los_Angeles")
+        tz = pytz.UTC  # Use UTC for scheduled tasks
         now = datetime.now(tz)
         
         # This would need to be adapted based on your actual user management
