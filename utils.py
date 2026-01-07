@@ -5,26 +5,26 @@ from datetime import datetime, timedelta
 import pytz
 from typing import List, Dict
 
-TZ = pytz.timezone("America/Los_Angeles")
-
-def get_today_start() -> datetime:
-    """Get start of today in LA timezone"""
-    now = datetime.now(TZ)
+def get_today_start(timezone: str = "UTC") -> datetime:
+    """Get start of today in specified timezone"""
+    tz = pytz.timezone(timezone)
+    now = datetime.now(tz)
     return now.replace(hour=0, minute=0, second=0, microsecond=0)
 
-def get_week_end() -> datetime:
-    """Get end of this week (Sunday) in LA timezone"""
-    today = get_today_start()
+def get_week_end(timezone: str = "UTC") -> datetime:
+    """Get end of this week (Sunday) in specified timezone"""
+    today = get_today_start(timezone)
     days_until_sunday = (6 - today.weekday()) % 7
     if days_until_sunday == 0:
         days_until_sunday = 7
     return today + timedelta(days=days_until_sunday)
 
-def filter_tasks_by_view(tasks: List[Dict], view: str) -> List[Dict]:
+def filter_tasks_by_view(tasks: List[Dict], view: str, user_timezone: str = "UTC") -> List[Dict]:
     """Filter tasks based on view (today, week, upcoming)"""
-    now = datetime.now(TZ)
-    today_start = get_today_start()
-    week_end = get_week_end()
+    tz = pytz.timezone(user_timezone)
+    now = datetime.now(tz)
+    today_start = get_today_start(user_timezone)
+    week_end = get_week_end(user_timezone)
     
     filtered = []
     
@@ -44,13 +44,14 @@ def filter_tasks_by_view(tasks: List[Dict], view: str) -> List[Dict]:
             if 'T' in due_date_str:
                 due_date = datetime.fromisoformat(due_date_str.replace('Z', '+00:00'))
             else:
-                due_date = datetime.fromisoformat(due_date_str).replace(tzinfo=TZ)
+                due_date = datetime.fromisoformat(due_date_str)
+                due_date = tz.localize(due_date)
             
-            # Convert to LA timezone if needed
+            # Convert to user timezone if needed
             if due_date.tzinfo is None:
-                due_date = TZ.localize(due_date)
+                due_date = tz.localize(due_date)
             else:
-                due_date = due_date.astimezone(TZ)
+                due_date = due_date.astimezone(tz)
             
             due_date_only = due_date.date()
             today_date = today_start.date()
@@ -87,7 +88,7 @@ def group_tasks_by_date(tasks: List[Dict]) -> Dict[str, List[Dict]]:
         else:
             try:
                 dt = datetime.fromisoformat(completed_at.replace('Z', '+00:00'))
-                dt = dt.astimezone(TZ)
+                # Use UTC for grouping completed tasks (or could use user timezone)
                 date_key = dt.strftime("%B %d, %Y")
             except:
                 date_key = "Unknown date"
