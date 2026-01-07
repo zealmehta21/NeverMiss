@@ -358,7 +358,6 @@ if 'user_timezone' not in st.session_state:
         # NEVER silently default to UTC
         if not detected_tz:
             detected_tz = 'America/New_York'  # Default for NY/NJ users
-            st.warning("⚠️ Could not detect timezone from browser. Using America/New_York as default. Please refresh the page to detect your timezone.")
         
         st.session_state.user_timezone = detected_tz
 
@@ -370,16 +369,6 @@ if user_tz == 'UTC':
     st.error("🚨 CRITICAL ERROR: User timezone is UTC! This should never happen. Using America/New_York as fallback.")
     user_tz = 'America/New_York'
     st.session_state.user_timezone = 'America/New_York'
-
-# Show detected timezone for debugging (temporary - remove after fixing)
-with st.expander("🔍 Debug: Timezone Info", expanded=False):
-    st.write(f"**Detected timezone:** {user_tz}")
-    from datetime import datetime
-    import pytz
-    tz = pytz.timezone(user_tz)
-    current_time = datetime.now(tz)
-    st.write(f"**Current time in your timezone:** {current_time.strftime('%I:%M %p %Z')}")
-    st.write(f"**Current time UTC:** {datetime.utcnow().strftime('%I:%M %p UTC')}")
 
 # Add JavaScript to detect and send timezone to Streamlit (only if not already set)
 # This runs on every page load until timezone is detected
