@@ -152,15 +152,12 @@ def get_current_datetime_str(timezone: str) -> str:
     """
     # GUARDRAIL: Fail loudly if timezone is UTC unexpectedly
     if timezone == "UTC":
-        print(f"⚠️ WARNING: get_current_datetime_str() called with UTC timezone!")
-        print(f"This should not happen for user-facing operations. Using America/New_York as fallback.")
         timezone = "America/New_York"
     
     try:
         tz = pytz.timezone(timezone)
         return datetime.now(tz).isoformat()
     except Exception as e:
-        print(f"ERROR: Invalid timezone '{timezone}': {e}. Using America/New_York as fallback.")
         tz = pytz.timezone("America/New_York")
         return datetime.now(tz).isoformat()
 
@@ -241,19 +238,14 @@ def normalize_datetime_to_timezone(dt_str: str, target_timezone: str) -> str:
         # This is a safety check - localize() should never change the hour
         if dt.hour != hour:
             error_msg = f"CRITICAL ERROR: Hour mismatch! Input hour: {hour}, Output hour: {dt.hour}. Input: {dt_str}, Cleaned: {dt_str_clean}, Components: {year}-{month}-{day} {hour}:{minute}:{second}, Timezone: {target_timezone}"
-            print(error_msg)
             # This should never happen with localize(), but if it does, raise an error
             raise ValueError(error_msg)
         
         # STEP 5: Return ISO format with correct DST-aware offset
         result = dt.isoformat()
-        print(f"✓ Normalized: {dt_str} -> {result} (hour preserved: {hour}, timezone: {target_timezone})")
         return result
         
     except Exception as e:
-        print(f"ERROR normalizing datetime {dt_str} to {target_timezone}: {e}")
-        import traceback
-        traceback.print_exc()
         return dt_str
 
 def format_existing_tasks_for_prompt(tasks: List[Dict]) -> str:
